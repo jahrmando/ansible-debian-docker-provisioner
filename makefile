@@ -2,6 +2,7 @@ USERNAME = $(shell whoami)
 TEMP_DIR = nullstring
 base_dir = $(shell pwd)
 NAME = debian-node-ssh
+playbook := $(base_dir)/test-playbook.yml
 
 setup_temp_dir:
 	$(eval TEMP_DIR := $(shell mktemp -d))
@@ -14,7 +15,7 @@ sshkey_create: setup_temp_dir
 	cp "$(TEMP_DIR)/id_rsa" "$(base_dir)/id_rsa_$(NAME)"
 	@echo "Your SSH key pair has been created in $(TEMP_DIR)"
 
-start_container: sshkey_create
+start_container: remove_container sshkey_create
 	docker build --tag "$(NAME)-last" \
 		--build-arg USER=$(USERNAME) \
 		--file "$(base_dir)/Dockerfile" $(TEMP_DIR)
@@ -30,11 +31,13 @@ setup_inventory:
 	@echo "[target_group]\nlocalhost ansible_ssh_port=$(node_port) ansible_ssh_user=$(USERNAME) ansible_ssh_private_key_file=$(base_dir)/id_rsa_$(NAME)" > $(base_dir)/hosts
 
 run_playbook: setup_inventory
-	ansible-playbook -i $(base_dir)/hosts $(base_dir)/test-playbook.yml
+	ansible-playbook -i $(base_dir)/hosts $(playbook)
 
-clean:
-	rm -rf $(TEMP_DIR)
+remove_container:
 	docker stop $(NAME) || true
 	docker rm $(NAME) || true
+
+clean: remove_container
+	rm -rf $(TEMP_DIR)
 	docker rmi "$(NAME)-last" || true
 	rm -f "$(base_dir)/id_rsa_$(NAME)"
